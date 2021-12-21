@@ -1,2 +1,5 @@
-test_bloom:
+test_bloom_filter:
 	python3 -m unittest test.bloom_filter_test
+
+test_skiplist:
+	python3 -m unittest test.skiplist_test
