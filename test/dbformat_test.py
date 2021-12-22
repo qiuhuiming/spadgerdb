@@ -21,3 +21,9 @@ class LookupKeyTest(TestCase):
         lookup_key2 = LookupKey(user_key, 2)
         self.assertGreater(lookup_key2.memtable_key(),
                            lookup_key1.memtable_key())
+
+    def test_length(self):
+        user_key = 'hello'
+        sequence = 1
+        lookup_key = LookupKey(user_key, sequence)
+        self.assertEqual(len(lookup_key.memtable_key()), len(user_key) + 8 + 4)

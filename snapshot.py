@@ -1,8 +1,11 @@
+from types import SequenceNumber
+
+
 class Snapshot:
-    def __init__(self, sequence_number: int):
+    def __init__(self, sequence_number: SequenceNumber):
         self._sequence_number = sequence_number
 
-    def get_sequence_number(self) -> int:
+    def get_sequence_number(self) -> SequenceNumber:
         return self._sequence_number
 
 
@@ -28,7 +31,7 @@ class SnapshotList:
     def empty(self) -> bool:
         return self._head.next == self._head
 
-    def new(self, sequence_number: int) -> Snapshot:
+    def new(self, sequence_number: SequenceNumber) -> Snapshot:
         snapshot = Snapshot(sequence_number)
         self.insert(snapshot)
         return snapshot

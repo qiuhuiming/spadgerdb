@@ -1,3 +1,6 @@
+from snapshot import Snapshot
+
+
 class DBOption:
     def __init__(self):
         self.create_if_missing = False
@@ -14,4 +17,4 @@ class ReadOption:
     def __init__(self):
         self.verify_checksums = True
         self.fill_cache = True
-        self.snapshot = None
+        self.snapshot: Snapshot = None

@@ -1,4 +1,5 @@
 from option import DBOption
+from types import SequenceNumber
 
 
 class Version:
@@ -13,7 +14,7 @@ class VersionSet:
         self._db_name = db_name
         self._option = option
         self._next_file_number = 2
-        self._last_sequence = 0
+        self._last_sequence: SequenceNumber = 0
         self._log_number = 0
 
         # VersionSet keeps a linked list of active versions.
