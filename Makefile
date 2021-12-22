@@ -3,3 +3,6 @@ test_bloom_filter:
 
 test_skiplist:
 	python3 -m unittest test.skiplist_test
+
+test_dbformat:
+	python3 -m unittest test.dbformat_test
