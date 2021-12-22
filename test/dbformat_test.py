@@ -1,5 +1,5 @@
 from unittest import TestCase
-from dbformat import LookupKey
+from dbformat import LookupKey, pack_user_key_sequence_type, ValueType, byte_order
 
 
 class LookupKeyTest(TestCase):
@@ -27,3 +27,11 @@ class LookupKeyTest(TestCase):
         sequence = 1
         lookup_key = LookupKey(user_key, sequence)
         self.assertEqual(len(lookup_key.memtable_key()), len(user_key) + 8 + 4)
+
+    def test_value_type_and_sequence_number(self):
+        internal_key_bytes = pack_user_key_sequence_type(
+            'hello', 1, ValueType.kTypeValue)
+        self.assertEqual(
+            internal_key_bytes[-1], ValueType.kTypeValue.value)
+        self.assertEqual(
+            int.from_bytes(internal_key_bytes[-8:-1], byte_order), 1)
