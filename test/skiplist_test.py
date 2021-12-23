@@ -9,7 +9,6 @@ def get_random_keys(size):
 
 def basic_test(tc: TestCase, rounds, key_size):
     for i in range(rounds):
-        print('== ROUND:', i + 1)
         sl = Skiplist()
         tc.assertEqual(sl.size(), 0)
         if i < 10:
@@ -32,18 +31,24 @@ def basic_test(tc: TestCase, rounds, key_size):
 
 
 class SkiplistTest(TestCase):
+    def test_compare(self):
+        def comparator(x, y):
+            return x - y
+
+        sl = Skiplist(comparator=comparator)
+        self.assertLess(sl._compare(1, 2), 0)
+        self.assertLessEqual(sl._compare(1, 1), 0)
+        self.assertGreater(sl._compare(2, 1), 0)
+        self.assertGreaterEqual(sl._compare(2, 2), 0)
+
     def test_insert_basic(self):
-        print('TEST_INSERT_BASIC')
         basic_test(self, 20, 100)
 
     def test_insert_many(self):
-        print('TEST_INSERT_MANY')
-        basic_test(self, 3, 100000)
+        basic_test(self, 1, 100000)
 
     def test_delete(self):
-        print('TEST_DELETE')
         for i in range(20):
-            print('== ROUND:', i + 1)
             sl = Skiplist()
             if i < 10:
                 keys = get_random_keys(100)
@@ -72,7 +77,6 @@ class SkiplistTest(TestCase):
                     self.assertIsNotNone(sl.search(key))
 
     def test_iter(self):
-        print('TEST_ITER')
         sl = Skiplist()
         for i in get_random_keys(1000):
             sl.insert(i, None)
@@ -86,15 +90,49 @@ class SkiplistTest(TestCase):
                 self.assertLess(prev.key, node.key)
             prev = node
 
+    def test_find_greater_or_equal(self):
+        for cnt in range(3):
+            sl = Skiplist()
+            for i in get_random_keys(1000):
+                sl.insert(i, None)
+            node, prev_list = sl.find_greater_or_equal(500, need_prev=True)
+            self.assertIsNotNone(node)
+            self.assertGreaterEqual(node.key, 500)
+            self.assertEqual(sl.head_level(), len(prev_list))
+            for prev in prev_list:
+                self.assertTrue(prev.key is None or prev.key < node.key)
+
+            node, _ = sl.find_greater_or_equal(500, need_prev=False)
+            self.assertIsNotNone(node)
+            self.assertGreaterEqual(node.key, 500)
+
+            node, prev_list = sl.find_greater_or_equal(-1, need_prev=True)
+            self.assertIsNone(node)
+            self.assertEqual(sl.head_level(), len(prev_list))
+            for prev in prev_list:
+                self.assertIsNone(prev.key)
+
+    def test_find_last_less(self):
+        for i in range(3):
+            sl = Skiplist()
+            for i in range(1000):
+                sl.insert(i, None)
+
+            node = sl.find_less_than(500)
+            self.assertIsNotNone(node)
+            self.assertLess(node.key, 500)
+            self.assertEqual(node.key, 499)
+
+
+class IteratorTest(TestCase):
     def test_iterator(self):
-        print('TEST_ITERATOR')
         sl = Skiplist()
         for i in range(1000):
             sl.insert(i, None)
         for node in sl:
             self.assertIsNotNone(node)
 
-        it = sl.get_iterator()
+        it = sl.iter()
         prev = None
         for node in it:
             self.assertIsNotNone(node)
@@ -102,33 +140,29 @@ class SkiplistTest(TestCase):
                 self.assertLess(prev.key, node.key)
             prev = node
 
-        it.reset()
+        it.seek_to_first()
 
-        it.find_greater_or_equal(500)
-        self.assertGreaterEqual(it.get_current().key, 500)
+        it.seek(500)
+        self.assertGreaterEqual(it.current().key, 500)
 
-        it.find_greater_or_equal(1000)
-        self.assertIsNone(it.get_current())
-
-        it.reset()
-
-        it.find_last_less(500)
-        self.assertEqual(it.get_current().key, 499)
+        it.seek(1000)
+        self.assertIsNone(it.current())
 
     def test_iterator_while_modify(self):
-        print('TEST_ITERATOR_WHILE_MODIFY')
         sl = Skiplist()
         for i in range(1000):
             sl.insert(i, None)
         for node in sl:
             self.assertIsNotNone(node)
 
-        it = sl.get_iterator()
-        it.find_greater_or_equal(500)
-        self.assertGreaterEqual(it.get_current().key, 500)
+        it = sl.iter()
+        it.seek(500)
+        self.assertGreaterEqual(it.current().key, 500)
 
         sl.insert(500.5, None)
-        self.assertEqual(it.next().key, 500.5)
+        it.next()
+        self.assertEqual(it.current().key, 500.5)
 
         sl.delete(501)
-        self.assertEqual(it.next().key, 502)
+        it.next()
+        self.assertEqual(it.current().key, 502)
