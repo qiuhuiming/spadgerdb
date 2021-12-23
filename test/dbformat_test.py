@@ -1,6 +1,5 @@
 from unittest import TestCase
-from dbformat import LookupKey, pack_user_key_sequence_type, ValueType, byte_order
-from dbformat import parse_user_key_from_memtable_key, parse_user_size_from_memtable_key, parse_internal_size_from_memtable_key, parse_tag_from_memtable_key
+from dbformat import LookupKey, Encoder, Decoder, ValueType, byte_order
 
 
 class LookupKeyTest(TestCase):
@@ -30,7 +29,7 @@ class LookupKeyTest(TestCase):
         self.assertEqual(len(lookup_key.memtable_key()), len(user_key) + 8 + 4)
 
     def test_value_type_and_sequence_number(self):
-        internal_key_bytes = pack_user_key_sequence_type(
+        internal_key_bytes = Encoder.encode_user_key_sequence_type(
             'hello', 1, ValueType.kTypeValue)
         self.assertEqual(
             internal_key_bytes[-1], ValueType.kTypeValue.value)
@@ -42,12 +41,13 @@ class LookupKeyTest(TestCase):
         sequence = 100000000
         lookup_key = LookupKey(user_key, sequence)
         self.assertEqual(
-            len(user_key), parse_user_size_from_memtable_key(lookup_key.memtable_key()))
-        self.assertEqual(lookup_key.user_key(), parse_user_key_from_memtable_key(
+            len(user_key), Decoder.decode_user_size_from_memtable_key(lookup_key.memtable_key()))
+        self.assertEqual(lookup_key.user_key(), Decoder.decode_user_key_from_memtable_key(
             lookup_key.memtable_key()))
         self.assertEqual(len(lookup_key.internal_key()),
-                         parse_internal_size_from_memtable_key(lookup_key.memtable_key()))
-        tag: bytes = parse_tag_from_memtable_key(lookup_key.memtable_key())
+                         Decoder.decode_internal_size_from_memtable_key(lookup_key.memtable_key()))
+        tag: bytes = Decoder.decode_tag_from_memtable_key(
+            lookup_key.memtable_key())
         parsed_sequence = int.from_bytes(
             tag[:7], byte_order)
         parsed_value_type = ValueType(tag[7])

@@ -12,33 +12,89 @@ class ValueType(Enum):
         return int(self.value).to_bytes(length, byteorder, signed=signed)
 
 
-def pack_sequence_and_type(seq: SequenceNumber, t: ValueType) -> bytearray:
-    res = bytearray(seq.to_bytes(7, byte_order))
-    res.extend(t.to_bytes(1, byte_order))
-    return res
+class Encoder:
+
+    @staticmethod
+    def encode_sequence_and_type(seq: SequenceNumber, t: ValueType) -> bytearray:
+        """
+
+        Args:
+            seq (SequenceNumber)
+            t (ValueType)
+
+        Returns:
+            bytearray: tag
+        """
+        res = bytearray(seq.to_bytes(7, byte_order))
+        res.extend(t.to_bytes(1, byte_order))
+        return res
+
+    @staticmethod
+    def encode_user_key_sequence_type(user_key: str, seq: SequenceNumber, t: ValueType) -> bytearray:
+        """
+
+        Args:
+            user_key (str): [description]
+            seq (SequenceNumber): 
+            t (ValueType): 
+
+        Returns:
+            bytearray: internal_key
+        """
+        res = bytearray(user_key.encode('utf-8'))
+        res.extend(Encoder.encode_sequence_and_type(seq, t))
+        return res
+
+    @staticmethod
+    def encode_full_memtable_key(s: SequenceNumber, key: str, value: str, t: ValueType) -> bytearray:
+        """
+
+        Encode Format:
+        |<internal_key_size>|<internal_key>|<value_size>|<value>|
+
+        Args:
+            s (SequenceNumber): 
+            key (str): 
+            value (str): 
+            t (ValueType): 
+
+        Returns:
+            bytearray: memtable_key
+        """
+        internal_key_bytes = Encoder.encode_user_key_sequence_type(key, s, t)
+        encoded_len = 4 + len(internal_key_bytes) + 4 + len(value)
+        buf = bytearray(int(len(internal_key_bytes)).to_bytes(4, byte_order))
+        buf.extend(internal_key_bytes)
+        buf.extend(int(len(value)).to_bytes(4, byte_order))
+        buf.extend(value.encode('utf-8'))
+        assert len(buf) == encoded_len
+
+        return buf
 
 
-def pack_user_key_sequence_type(user_key: str, seq: SequenceNumber, t: ValueType) -> bytearray:
-    res = bytearray(user_key.encode('utf-8'))
-    res.extend(pack_sequence_and_type(seq, t))
-    return res
+class Decoder:
 
+    @staticmethod
+    def decode_internal_size_from_memtable_key(mkey: bytearray) -> int:
+        return int.from_bytes(mkey[:4], byte_order)
 
-def parse_internal_size_from_memtable_key(mkey: bytearray) -> int:
-    return int.from_bytes(mkey[:4], byte_order)
+    @staticmethod
+    def decode_user_size_from_memtable_key(mkey: bytearray) -> int:
+        return Decoder.decode_internal_size_from_memtable_key(mkey) - 8
 
+    @staticmethod
+    def decode_user_key_from_memtable_key(mkey: bytearray) -> str:
+        return mkey[4: 4 + Decoder.decode_user_size_from_memtable_key(mkey)].decode('utf-8')
 
-def parse_user_size_from_memtable_key(mkey: bytearray) -> int:
-    return parse_internal_size_from_memtable_key(mkey) - 8
+    @staticmethod
+    def decode_tag_from_memtable_key(mkey: bytearray) -> bytes:
+        start = 4 + Decoder.decode_user_size_from_memtable_key(mkey)
+        return mkey[start: start + 8]
 
-
-def parse_user_key_from_memtable_key(mkey: bytearray) -> str:
-    return mkey[4: 4 + parse_user_size_from_memtable_key(mkey)].decode('utf-8')
-
-
-def parse_tag_from_memtable_key(mkey: bytearray) -> bytes:
-    start = 4 + parse_user_size_from_memtable_key(mkey)
-    return mkey[start: start + 8]
+    @staticmethod
+    def decode_value_from_memtable_key(mkey: bytearray) -> str:
+        start = 4 + Decoder.decode_user_size_from_memtable_key(mkey) + 8 + 4
+        return mkey[start:].decode('utf-8')
 
 
 class LookupKey:
@@ -46,7 +102,7 @@ class LookupKey:
         length = len(user_key) + 8  # The length of internal key
         self._bytes = bytearray(length.to_bytes(4, byte_order))
         self._bytes.extend(user_key.encode('utf-8'))
-        self._bytes.extend(pack_sequence_and_type(
+        self._bytes.extend(Encoder.encode_sequence_and_type(
             sequence, ValueType.kTypeValue))
         """
         |<length>|<user_key>|<sequence>|<type> |
