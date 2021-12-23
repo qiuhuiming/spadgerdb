@@ -93,7 +93,7 @@ class SkiplistTest(TestCase):
     def test_find_greater_or_equal(self):
         for cnt in range(3):
             sl = Skiplist()
-            for i in get_random_keys(1000):
+            for i in range(1000):
                 sl.insert(i, None)
             node, prev_list = sl.find_greater_or_equal(500, need_prev=True)
             self.assertIsNotNone(node)
@@ -107,7 +107,8 @@ class SkiplistTest(TestCase):
             self.assertGreaterEqual(node.key, 500)
 
             node, prev_list = sl.find_greater_or_equal(-1, need_prev=True)
-            self.assertIsNone(node)
+            self.assertIsNotNone(node)
+            self.assertEqual(node.key, 0)
             self.assertEqual(sl.head_level(), len(prev_list))
             for prev in prev_list:
                 self.assertIsNone(prev.key)

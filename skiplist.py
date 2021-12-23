@@ -130,7 +130,6 @@ class Skiplist:
         that are less than the key for each level.
         """
         x = self._head
-        l = self._head.level - 1
         if need_prev:
             prev = [None] * self._head.level
 
@@ -141,10 +140,7 @@ class Skiplist:
             if need_prev:
                 prev[i] = x
 
-        if x == self._head:
-            x = None
-        else:
-            x = x.forward[0]
+        x = x.forward[0]
 
         if need_prev:
             return x, prev
@@ -203,3 +199,7 @@ class Iterator:
         self._current = self._skiplist.find_last()
         if self._current == self._skiplist._head:
             self._current = None
+
+    def value(self):
+        assert self.valid()
+        return self._current.value
