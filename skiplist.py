@@ -1,5 +1,6 @@
 import random
 from typing import List
+from utils import default_comparator
 
 
 class Node:
@@ -16,18 +17,12 @@ class Skiplist:
         self.p = p
         self.max_level = max_level
         self._size = 0
-        self._comparator = comparator
+        self._comparator = default_comparator(comparator)
 
     def _compare(self, key_x, key_y) -> int:
         """
         Returns -1 if x < y, 1 if x > y, and 0 if x == y.
         """
-        if self._comparator is None:
-            if key_x == key_y:
-                return 0
-            if key_x < key_y:
-                return -1
-            return 1
         return self._comparator(key_x, key_y)
 
     def size(self):
@@ -46,7 +41,7 @@ class Skiplist:
     def contains(self, key):
         return self.search(key) is not None
 
-    def insert(self, key, value):
+    def insert(self, key, value=None):
         new_level = self._random_level()
 
         update = [None] * max(new_level, self._head.level)
