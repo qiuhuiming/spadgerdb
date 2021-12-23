@@ -11,6 +11,9 @@ class ValueType(Enum):
     def to_bytes(self, length: int, byteorder: str, *, signed: bool = ...) -> bytes:
         return int(self.value).to_bytes(length, byteorder, signed=signed)
 
+    def __str__(self):
+        return self.name
+
 
 class Encoder:
 

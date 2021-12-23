@@ -8,3 +8,6 @@ test_skiplist:
 
 test_dbformat:
 	python3 -m unittest test.dbformat_test
+
+test_memtable:
+	python3 -m unittest test.memtable_test

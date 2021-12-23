@@ -42,22 +42,27 @@ class Status:
     def ok(self) -> bool:
         return self.code == OK_CODE
 
+    def assign(self, other):
+        self.code = other.code
+        self.msg = other.msg
+        return self
+
     @staticmethod
     def OK():
         return Status(OK_CODE, 'OK')
 
     @staticmethod
-    def NotFound(msg):
+    def NotFound(msg=''):
         return Status(NOT_FOUND_CODE, msg)
 
     @staticmethod
-    def IOError(msg):
+    def IOError(msg=''):
         return Status(IO_ERROR_CODE, msg)
 
     @staticmethod
-    def SerdeError(msg):
+    def SerdeError(msg=''):
         return Status(SERDE_ERROR_CODE, msg)
 
     @staticmethod
-    def InvalidArgument(msg):
+    def InvalidArgument(msg=''):
         return Status(INVALID_ARGUMENT_CODE, msg)
