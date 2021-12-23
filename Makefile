@@ -11,3 +11,6 @@ test_dbformat:
 
 test_memtable:
 	python3 -m unittest test.memtable_test
+
+test_db:
+	python3 -m unittest test.db_test

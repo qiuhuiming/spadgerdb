@@ -1,5 +1,10 @@
 from option import DBOption
-from types import SequenceNumber
+from db_types import SequenceNumber
+from status import Status
+
+
+class VersionSet:
+    pass
 
 
 class Version:

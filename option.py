@@ -10,7 +10,8 @@ class DBOption:
 
 
 class WriteOption:
-    pass
+    def __init__(self):
+        self.sync = False
 
 
 class ReadOption:

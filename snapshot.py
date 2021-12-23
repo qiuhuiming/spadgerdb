@@ -1,4 +1,4 @@
-from types import SequenceNumber
+from db_types import SequenceNumber
 
 
 class Snapshot:

@@ -3,6 +3,7 @@ NOT_FOUND_CODE = 1
 IO_ERROR_CODE = 2
 SERDE_ERROR_CODE = 3
 INVALID_ARGUMENT_CODE = 4
+CORRUPTION_CODE = 5
 
 
 def status_str(status_code) -> str:
@@ -66,3 +67,7 @@ class Status:
     @staticmethod
     def InvalidArgument(msg=''):
         return Status(INVALID_ARGUMENT_CODE, msg)
+
+    @staticmethod
+    def Corruption(msg=''):
+        return Status(CORRUPTION_CODE, msg)

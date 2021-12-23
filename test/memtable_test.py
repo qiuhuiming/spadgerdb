@@ -2,6 +2,7 @@ from memtable import MemTable
 from unittest import TestCase
 from dbformat import ValueType, LookupKey
 from status import Status
+from test.utils import random_user_str
 
 
 class MemtableTest(TestCase):
@@ -59,9 +60,6 @@ class MemtableTest(TestCase):
                 self.assertEqual(value[0], v[0])
 
     def test_multiple(self):
-
-        def random_user_str(size: int) -> str:
-            return ''.join(chr(ord('a') + i) for i in range(size))
 
         for cnt in range(3):
             # Test multiple times.
