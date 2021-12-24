@@ -1,2 +1,5 @@
+import random
+
+
 def random_user_str(size: int) -> str:
-    return ''.join(chr(ord('a') + i) for i in range(size))
+    return ''.join(chr(ord('a') + random.randint(0, 26)) for _ in range(size))
