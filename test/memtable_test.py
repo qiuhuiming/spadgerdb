@@ -2,7 +2,7 @@ from memtable import MemTable
 from unittest import TestCase
 from dbformat import ValueType, LookupKey
 from status import Status
-from test.utils import random_user_str
+from test.test_utils import random_user_str
 
 
 class MemtableTest(TestCase):

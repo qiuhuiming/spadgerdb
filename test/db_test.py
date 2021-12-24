@@ -2,7 +2,7 @@ import unittest
 from option import DBOption, WriteOption, ReadOption
 from db import DB
 from status import Status
-from test.utils import random_user_str
+from test.test_utils import random_user_str
 from typing import Dict, Set
 import random
 from write_batch import WriteBatch
