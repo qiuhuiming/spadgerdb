@@ -21,7 +21,6 @@ class DB:
         self._log_file_num = None
         self._db_name = db_name
         self._option = option
-        self._mu = Lock()
         self._versions = VersionSet(db_name=db_name, option=option)
 
     @staticmethod
@@ -32,35 +31,30 @@ class DB:
         return db, Status.OK()
 
     def get(self, option: ReadOption, key: str, value: List[str]) -> Status:
-        self._mu.acquire()
         s = Status.OK()
-        try:
-            # Read sequence number from option.
-            # If option.snapshot is None, use the last sequence number from versions.
-            seq = 0
-            if option.snapshot:
-                seq = option.snapshot.get_sequence_number()
-            else:
-                seq = self._versions.get_last_sequence()
+        # Read sequence number from option.
+        # If option.snapshot is None, use the last sequence number from versions.
+        seq = 0
+        if option.snapshot:
+            seq = option.snapshot.get_sequence_number()
+        else:
+            seq = self._versions.get_last_sequence()
 
-            # We can unlock while reading from the DB and then re-lock when doing the next Get.
-            self._mu.release()
+        lkey = LookupKey(user_key=key, sequence=seq)
+        # Firstly, try to get from memtable.
+        if self._mem.get(lkey, value, s):
+            # Done
+            pass
+        # If not found, try to get from immutable memtable.
+        elif self._imm and self._imm.get(lkey, value, s):
+            # Done
+            pass
+        # If not found, try to get from SSTable.
+        # TODO: Read from persistent storage
+        else:
+            pass
 
-            lkey = LookupKey(user_key=key, sequence=seq)
-            if self._mem.get(lkey, value, s):
-                # Done
-                pass
-            elif self._imm and self._imm.get(lkey, value, s):
-                # Done
-                pass
-            else:
-                # TODO: read from persistent storage
-                pass
-            self._mu.acquire()
-
-            # TODO: schedule to compact the memtable.
-        finally:
-            self._mu.release()
+        # TODO: schedule to compact the memtable.
 
         return s
 
@@ -77,8 +71,6 @@ class DB:
     def write(self, option: WriteOption, batch: WriteBatch) -> Status:
         s = Status.OK()
 
-        self._mu.acquire()
-
         # TODO: Initialize the writers
 
         # Accquire last sequence number
@@ -86,18 +78,13 @@ class DB:
         batch.set_sequence_number(last_sequence + 1)
         last_sequence += batch.count()
 
-        self._mu.release()
         # TODO: Write to WAL
 
         # TODO: Write to memtable
         s = batch.apply(mem_table=self._mem)
 
-        self._mu.acquire()
-
         self._versions.set_last_sequence(last_sequence)
 
         # TODO: Update writers
-
-        self._mu.release()
 
         return s
