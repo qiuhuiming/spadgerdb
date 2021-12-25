@@ -1,5 +1,7 @@
 from dbformat import Decoder, byte_order
 
+DEFAULT_COMPARATOR = 'default_comparator'
+
 
 def default_comparator(comparator: lambda x, y: int) -> lambda x, y: int:
     if comparator is None:
@@ -7,8 +9,14 @@ def default_comparator(comparator: lambda x, y: int) -> lambda x, y: int:
     return comparator
 
 
+USER_KEY_COMPARATOR = 'user_key_comparator'
+
+
 def user_key_comparator(key_x, key_y) -> int:
     return 0 if key_x == key_y else -1 if key_x < key_y else 1
+
+
+INTERNAL_KEY_COMPARATOR = 'internal_key_comparator'
 
 
 def internal_key_comparator(key_x, key_y) -> int:

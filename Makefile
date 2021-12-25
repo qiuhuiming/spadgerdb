@@ -20,3 +20,6 @@ test_log:
 
 test_write_batch:
 	python3 -m unittest test.write_batch_test
+
+test_version_edit:
+	python3 -m unittest test.version_edit_test
