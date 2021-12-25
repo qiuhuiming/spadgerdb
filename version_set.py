@@ -1,10 +1,14 @@
+import os.path
+
+from version_edit import VersionEdit
 from option import DBOption
 from db_types import SequenceNumber
 from status import Status
 from typing import List
 from version_edit import FileMetaData
 from config import MAX_NUM_LEVEL
-
+from utils import current_file_name, USER_KEY_COMPARATOR
+from log_reader import Reader
 
 
 class Version:
@@ -30,12 +34,28 @@ class Version:
         return self._ref
 
 
+class VersionBuilder:
+    def __init__(self, vs: 'VersionSet', base: Version):
+        self._version_set = vs
+        self._base = base
+        # TODO: more status about metadata of files
+
+    def apply(self, edit: VersionEdit):
+        pass
+
+    def build(self, v: Version):
+        # TODO: do something like adding files to version
+        pass
+
+
 class VersionSet:
     def __init__(self, db_name: str, option: DBOption):
         self._db_name = db_name
         self._option = option
         self._next_file_number = 2
+        self._prev_log_number = 0
         self._last_sequence: SequenceNumber = 0
+        self._manifest_file_number = 0
         self._log_number = 0
 
         # VersionSet keeps a linked list of active versions.
@@ -47,11 +67,127 @@ class VersionSet:
         self._dummy: Version = Version(self)
         self.append(Version(self))
 
+    def next_file_number(self) -> int:
+        return self._next_file_number
+
+    def prev_log_number(self) -> int:
+        return self._prev_log_number
+
+    def last_sequence(self) -> SequenceNumber:
+        return self._last_sequence
+
+    def manifest_file_number(self) -> int:
+        return self._manifest_file_number
+
+    def log_number(self) -> int:
+        return self._log_number
+
     def current(self) -> Version:
         return self._current
 
-    def recover(self) -> Status:
-        return Status.OK()
+    def recover(self) -> (Status, bool):
+        """
+        recover from persistent storage
+        1. read from current file
+        2. read from manifest file
+        3. for each record in manifest file
+            1. deserialize it to a VersionEdit
+            2. update metadata
+            3. apply each version edit to VersionBuilder
+        4. build the version and append it to the version set
+        :return: status, should_save_manifest
+        """
+        s = Status.OK()
+        should_save_manifest = False
+
+        current_path = current_file_name(self._db_name)
+        if not os.path.exists(current_path):
+            s = Status.Corruption('current file not found')
+            return s, should_save_manifest
+
+        current = ''
+        with open(current_path, 'r') as current_fd:
+            current = current_fd.readline()
+            if current == '':
+                s = Status.Corruption('current file is empty')
+                return s, should_save_manifest
+
+        manifest_path = os.path.join(self._db_name, current)
+        if not os.path.exists(manifest_path):
+            s = Status.Corruption('manifest file not found')
+            return s, should_save_manifest
+
+        has_log_number = False
+        has_prev_log_number = False
+        has_last_sequence_number = False
+        has_next_file_number = False
+        log_number = 0
+        prev_log_number = 0
+        last_sequence_number = 0
+        next_file_number = 0
+        reads_records = 0
+        builder = VersionBuilder(self, self._current)
+
+        reader = Reader(manifest_path)
+        while True:
+            record = reader.read_record()
+            if record is None:
+                break
+            edit = VersionEdit.deserialize(record)
+
+            if edit.has_comparator:
+                if edit.comparator != USER_KEY_COMPARATOR:
+                    s = Status.InvalidArgument(f'{edit.comparator} is not match {USER_KEY_COMPARATOR}')
+                    return s, should_save_manifest
+
+            builder.apply(edit)
+
+            if edit.has_log_number:
+                has_log_number = True
+                log_number = edit.log_number
+
+            if edit.has_prev_log_number:
+                has_prev_log_number = True
+                prev_log_number = edit.prev_log_number
+
+            if edit.has_last_sequence:
+                has_last_sequence_number = True
+                last_sequence_number = edit.last_sequence
+
+            if edit.has_next_file_number:
+                has_next_file_number = True
+                next_file_number = edit.next_file_number
+        del reader
+
+        if not has_log_number:
+            s = Status.Corruption('log number not found')
+            return s, should_save_manifest
+        elif not has_next_file_number:
+            s = Status.Corruption('next file number not found')
+            return s, should_save_manifest
+        elif not has_last_sequence_number:
+            s = Status.Corruption('last sequence number not found')
+            return s, should_save_manifest
+
+        if not has_last_sequence_number:
+            last_sequence_number = 0
+
+        self.mark_file_number_used(log_number)
+        self.mark_file_number_used(prev_log_number)
+
+        version = Version(self)
+        builder.build(version)
+        self.append(version)
+        self._manifest_file_number = next_file_number
+        self._next_file_number = next_file_number + 1
+        self._last_sequence = last_sequence_number
+        self._log_number = log_number
+        self._prev_log_number = prev_log_number
+
+        # For simplicity, we always save manifest
+        should_save_manifest = True
+
+        return Status.OK(), should_save_manifest
 
     def append(self, version: Version):
         assert version.get_ref() == 0
@@ -74,3 +210,11 @@ class VersionSet:
     def set_last_sequence(self, seq: int):
         assert seq >= self._last_sequence
         self._last_sequence = seq
+
+    def mark_file_number_used(self, log_number: int):
+        if self._next_file_number <= log_number:
+            self._next_file_number = log_number + 1
+
+    def log_and_apply(self, edit: VersionEdit):
+        # TODO
+        pass

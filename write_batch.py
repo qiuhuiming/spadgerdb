@@ -6,10 +6,6 @@ from typing import Tuple
 
 
 class WriteBatch:
-    pass
-
-
-class WriteBatch:
     def __init__(self):
         self._batch = []
         self._count = 0
@@ -38,6 +34,9 @@ class WriteBatch:
 
     def set_sequence_number(self, sequence_number):
         self._sequence_number = sequence_number
+
+    def sequence_number(self):
+        return self._sequence_number
 
     class Handler:
         def __init__(self, mem_table: MemTable, sequence_number: SequenceNumber):
@@ -112,7 +111,7 @@ class WriteBatch:
         return buf
 
     @staticmethod
-    def deserialize(data: bytearray) -> WriteBatch:
+    def deserialize(data: bytearray) -> 'WriteBatch':
         seq = int.from_bytes(data[:4], byte_order)
         assert seq >= 0
         count = int.from_bytes(data[4:8], byte_order)
@@ -150,6 +149,7 @@ class WriteBatch:
         if self._count != other._count or self._sequence_number != other._sequence_number:
             return False
         for i in range(self._count):
-            if self._batch[i][0] != other._batch[i][0] or self._batch[i][1] != other._batch[i][1] or self._batch[i][2] != other._batch[i][2]:
+            if self._batch[i][0] != other._batch[i][0] or self._batch[i][1] != other._batch[i][1] or self._batch[i][
+                2] != other._batch[i][2]:
                 return False
         return True

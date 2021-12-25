@@ -26,7 +26,7 @@ class DBTest(unittest.TestCase):
         s = db.get(ReadOption(), "foo", value)
         self.assertEqual(s, Status.NotFound())
 
-        self.assertEqual(db._versions.get_last_sequence(), 2)
+        self.assertEqual(db.versions.get_last_sequence(), 2)
 
     def test_basic_2(self):
         db, s = DB.open("Foo", DBOption())

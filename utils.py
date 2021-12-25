@@ -1,3 +1,6 @@
+import os.path
+from status import Status
+
 from dbformat import Decoder, byte_order
 
 DEFAULT_COMPARATOR = 'default_comparator'
@@ -55,3 +58,26 @@ def internal_key_comparator(key_x, key_y) -> int:
         return -1
 
     return 0
+
+
+def current_file_name(db_name) -> str:
+    return os.path.join(db_name, 'CURRENT')
+
+
+def log_file_name(db_name, log_number: int) -> str:
+    return os.path.join(db_name, f'{log_number}.log')
+
+
+def manifest_file_name(db_name: str, file_number: int) -> str:
+    return os.path.join(db_name, f'{file_number}.manifest')
+
+
+def save_current_file(db_name: str, file_number: int) -> Status:
+    current_file = current_file_name(db_name)
+    try:
+        with open(current_file, 'w') as f:
+            f.write(f'{file_number}.manifest')
+            f.close()
+        return Status.OK()
+    except Exception as e:
+        return Status.IOError(f'{e}')

@@ -1,15 +1,16 @@
+import os.path
+
 from status import Status
-from threading import Lock
 from option import ReadOption, WriteOption, DBOption
-from version import VersionSet
+from version_edit import VersionEdit
+from version_set import VersionSet
 from dbformat import LookupKey
 from memtable import MemTable
 from write_batch import WriteBatch
 from typing import List
-
-
-class DB:
-    pass
+from log_writer import Writer
+from log_reader import Reader
+from utils import log_file_name, current_file_name, USER_KEY_COMPARATOR, manifest_file_name, save_current_file
 
 
 class DB:
@@ -21,14 +22,86 @@ class DB:
         self._log_file_num = None
         self._db_name = db_name
         self._option = option
-        self._versions = VersionSet(db_name=db_name, option=option)
+        self.versions = VersionSet(db_name=db_name, option=option)
+        self.writer: Writer = None
 
     @staticmethod
-    def open(db_name: str, option: DBOption) -> (DB, Status):
+    def open(db_name: str, option: DBOption) -> ('DB', Status):
         db = DB(db_name, option)
-        # TODO: Recover from WAL
-        db._mem = MemTable()
+        s, should_save_manifest = db.recover()
+        if not s.ok():
+            return None, s
+
+        edit = VersionEdit()
+        if db._mem is None:
+            new_log_number = db.versions.next_file_number()
+            try:
+                writer = Writer(log_file_name(db_name, new_log_number))
+            except Exception as e:
+                return None, Status.IOError(str(e))
+
+            edit.log_number = new_log_number
+            db.writer = writer
+            db._mem = MemTable()
+            db._log_file_num = new_log_number
+
+        if should_save_manifest:
+            edit.prev_log_number = 0
+            edit.log_number = db._log_file_num
+            s = db.versions.log_and_apply(edit)
+            if not s.ok():
+                return None, s
+
         return db, Status.OK()
+
+    def recover(self) -> (Status, bool):
+        s = Status.OK()
+        should_save_manifest = False
+
+        if not os.path.exists(self._db_name):
+            os.mkdir(self._db_name)
+        # Maybe we need lock the file
+
+        if not os.path.exists(current_file_name(self._db_name)):
+            if not self._option.create_if_missing:
+                s = Status.InvalidArgument('DB not exist')
+                return s, should_save_manifest
+            else:
+                s = self.new_db()
+                if not s.ok():
+                    return s, should_save_manifest
+        else:
+            if self._option.error_if_exists:
+                s = Status.InvalidArgument('DB already exist')
+                return s, should_save_manifest
+
+        s, should_save_manifest = self.versions.recover()
+        if not s.ok():
+            return s, should_save_manifest
+
+        max_sequence = 0
+
+        min_log_number = self.versions.log_number()
+        prev_log_number = self.versions.prev_log_number()
+        filenames = os.listdir(self._db_name)
+        # Here we do not check whether there is missing file for simplicity.
+
+        log_numbers = []
+        for name in filenames:
+            if name.endswith('.log'):
+                log_number = int(name[:-4])
+                if log_number >= min_log_number or log_number == prev_log_number:
+                    log_numbers.append(log_number)
+
+        log_numbers.sort()
+        for log_number in log_numbers:
+            s, max_sequence, should_save_manifest = self.recover_log_file(log_number)
+            if not s.ok():
+                return s, should_save_manifest
+
+            self.versions.mark_file_number_used(log_number)
+
+        return s, should_save_manifest
 
     def get(self, option: ReadOption, key: str, value: List[str]) -> Status:
         s = Status.OK()
@@ -38,7 +111,7 @@ class DB:
         if option.snapshot:
             seq = option.snapshot.get_sequence_number()
         else:
-            seq = self._versions.get_last_sequence()
+            seq = self.versions.get_last_sequence()
 
         lkey = LookupKey(user_key=key, sequence=seq)
         # Firstly, try to get from memtable.
@@ -74,7 +147,7 @@ class DB:
         # TODO: Initialize the writers
 
         # Accquire last sequence number
-        last_sequence = self._versions.get_last_sequence()
+        last_sequence = self.versions.get_last_sequence()
         batch.set_sequence_number(last_sequence + 1)
         last_sequence += batch.count()
 
@@ -83,8 +156,68 @@ class DB:
         # TODO: Write to memtable
         s = batch.apply(mem_table=self._mem)
 
-        self._versions.set_last_sequence(last_sequence)
+        self.versions.set_last_sequence(last_sequence)
 
         # TODO: Update writers
 
         return s
+
+    def new_db(self) -> Status:
+        edit = VersionEdit()
+        edit.log_number = 0
+        edit.next_file_number = 2
+        edit.last_sequence = 0
+        edit.comparator = USER_KEY_COMPARATOR
+
+        manifest = manifest_file_name(self._db_name, 1)
+        writer = Writer(manifest)
+        records = edit.serialize()
+        writer.write_record(records)
+        writer.flush()
+        del writer
+
+        s = save_current_file(self._db_name, 1)
+        if not s.ok():
+            if os.path.exists(manifest):
+                os.remove(manifest)
+            return s
+
+        return Status.OK()
+
+    def recover_log_file(self, log_number: int) -> (Status, int, bool):
+        s = Status.OK()
+        max_sequence = 0
+        should_save_manifest = False
+
+        path = log_file_name(self._db_name, log_number)
+        if not os.path.exists(path):
+            return Status.IOError('Log file not exist'), max_sequence, should_save_manifest
+
+        reader = Reader(path)
+        while True:
+            record = reader.read_record()
+            if record is None:
+                break
+            try:
+                batch = WriteBatch.deserialize(record)
+                assert batch.count() is not None and batch.sequence_number() is not None
+            except Exception as e:
+                return Status.SerdeError(str(e)), max_sequence, should_save_manifest
+
+            last_seq = batch.sequence_number() + batch.count() - 1
+
+            if self._mem is None:
+                self._mem = MemTable()
+
+            s = batch.apply(mem_table=self._mem)
+            if not s.ok():
+                return s, max_sequence, should_save_manifest
+
+            max_sequence = max(max_sequence, last_seq)
+
+
+        del reader
+
+        should_save_manifest = True
+        # TODO: schedule to compact the memtable.
+        return Status.OK(), max_sequence, should_save_manifest
