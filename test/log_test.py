@@ -9,21 +9,21 @@ from test.test_utils import random_user_str
 
 
 class LogTest(unittest.TestCase):
-    def test_basic(self):
+    def test_basic_1(self):
         try:
             writer = Writer('tmp.log')
-            batch = WriteBatch()
-            batch.put('key1', 'value1')
-            batch.set_sequence_number(1)
+            key = random_user_str(100)
+            data = bytearray(key.encode('utf-8'))
+            writer.write_record(data)
 
-            writer.write(WriteOption(), batch)
             writer.flush()
 
             reader = Reader('tmp.log')
-            batch2 = reader.read_batch()
-            self.assertEqual(batch, batch2)
+            read_data = reader.read_record()
+            read_key = read_data.decode('utf-8')
+            self.assertEqual(key, read_key)
 
-            self.assertIsNone(reader.read_batch())
+            self.assertIsNone(reader.read_record())
         finally:
             if os.path.exists('tmp.log'):
                 os.remove('tmp.log')
@@ -31,56 +31,21 @@ class LogTest(unittest.TestCase):
     def test_basic_2(self):
         try:
             writer = Writer('tmp.log')
-            batch = WriteBatch()
-            for i in range(200):
-                key = random_user_str(10)
-                value = random_user_str(10)
-                if random.random() < 0.8:
-                    batch.put(key, value)
-                else:
-                    batch.delete(key)
-            batch.set_sequence_number(1)
+            keys = [''] * 200
+            for i in range(len(keys)):
+                keys[i] = random_user_str(100)
+                data = bytearray(keys[i].encode('utf-8'))
+                writer.write_record(data)
 
-            writer.write(WriteOption(), batch)
             writer.flush()
 
             reader = Reader('tmp.log')
-            batch2 = reader.read_batch()
-            self.assertEqual(batch, batch2)
+            for i in range(len(keys)):
+                read_data = reader.read_record()
+                read_key = read_data.decode('utf-8')
+                self.assertEqual(keys[i], read_key)
 
-            self.assertIsNone(reader.read_batch())
-        finally:
-            if os.path.exists('tmp.log'):
-                os.remove('tmp.log')
-
-    def test_basic_3(self):
-        try:
-            writer = Writer('tmp.log')
-            batches = []
-            seq = 10
-            for batch_i in range(200):
-                op_num = random.randint(1, 10)
-                for i in range(op_num):
-                    batch = WriteBatch()
-                    key = random_user_str(10)
-                    value = random_user_str(10)
-                    if random.random() < 0.8:
-                        batch.put(key, value)
-                    else:
-                        batch.delete(key)
-                batch.set_sequence_number(seq)
-                seq += op_num
-                writer.write(WriteOption(), batch)
-                batches.append(batch)
-            writer.flush()
-
-            reader = Reader('tmp.log')
-            for batch_i in range(len(batches)):
-                batch = reader.read_batch()
-                self.assertIsNotNone(batch)
-                self.assertEqual(batches[batch_i], batch)
-
-            self.assertIsNone(reader.read_batch())
+            self.assertIsNone(reader.read_record())
         finally:
             if os.path.exists('tmp.log'):
                 os.remove('tmp.log')

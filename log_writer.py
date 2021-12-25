@@ -1,5 +1,3 @@
-from write_batch import WriteBatch
-from option import WriteOption
 import zlib
 from dbformat import byte_order
 
@@ -14,18 +12,16 @@ class Writer:
         self._fd.flush()
         self._fd.close()
 
-    def write(self, option: WriteOption, batch: WriteBatch):
+    def write_record(self, data: bytearray):
         """
-        The log writer writes a batch of write operations to the log file.
+        The log writer writes a record of bytes to the log file.
         The format of the log file is as follows:
         |length: 4 bytes|batch_data|checksum: 4 bytes|
-        :param option:
-        :param batch:
+        :param data: bytearray to write
         :return:
         """
         buffer = bytearray()
 
-        data = batch.serialize()
         length = len(data)
         buffer.extend(length.to_bytes(4, byteorder=byte_order))
         buffer.extend(data)
@@ -33,8 +29,6 @@ class Writer:
         buffer.extend(checksum.to_bytes(4, byteorder=byte_order))
 
         self._fd.write(buffer)
-        if option and option.sync:
-            self._fd.flush()
         self._write_size += len(buffer)
 
     def write_size(self) -> int:

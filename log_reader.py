@@ -1,6 +1,5 @@
 import zlib
 
-from write_batch import WriteBatch
 from dbformat import byte_order
 
 
@@ -16,10 +15,10 @@ class Reader:
     def end(self):
         return self.end_of_file
 
-    def read_batch(self) -> WriteBatch:
+    def read_record(self) -> bytearray:
         """
-        Reads a batch from the log file.
-        :return: A WriteBatch object. If the file is end, returns None.
+        Reads a record from the log file.
+        :return: A bytearray object. If the file is end, returns None.
         """
         if self.end():
             return None
@@ -39,4 +38,4 @@ class Reader:
         if checksum != checksum_from_log:
             raise Exception("Checksum mismatch")
 
-        return WriteBatch.deserialize(data)
+        return data
