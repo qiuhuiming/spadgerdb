@@ -18,8 +18,7 @@ class DB:
         self._mem: MemTable = None
         self._imm: MemTable = None
         self._has_imm = False
-        self._log_file = None
-        self._log_file_num = None
+        self._log_file_num: int = None
         self._db_name = db_name
         self._option = option
         self.versions = VersionSet(db_name=db_name, option=option)
@@ -27,6 +26,7 @@ class DB:
 
     @staticmethod
     def open(db_name: str, option: DBOption) -> ('DB', Status):
+        print(f'open db: {db_name}')
         db = DB(db_name, option)
         s, should_save_manifest = db.recover()
         if not s.ok():
@@ -46,6 +46,7 @@ class DB:
             db._log_file_num = new_log_number
 
         if should_save_manifest:
+            print('save manifest')
             edit.set_prev_log_number(0)
             edit.set_log_number(db._log_file_num)
             s = db.versions.log_and_apply(edit)
@@ -94,6 +95,7 @@ class DB:
                     log_numbers.append(log_number)
 
         log_numbers.sort()
+        print(f'recover log numbers: {log_numbers}')
         for log_number in log_numbers:
             s, max_sequence, should_save_manifest = self.recover_log_file(log_number)
             if not s.ok():
@@ -152,14 +154,19 @@ class DB:
         batch.set_sequence_number(last_sequence + 1)
         last_sequence += batch.count()
 
-        # TODO: Write to WAL
+        # Write to WAL
+        if self.log_number() is None:
+            if self.writer:
+                self.writer.close()
+            self._log_file_num = self.versions.new_file_number()
+            self.writer = Writer(log_file_name(self._db_name, self._log_file_num))
+        self.writer.write_record(batch.serialize())
 
-        # TODO: Write to memtable
+        # Write to memtable
         s = batch.apply(mem_table=self._mem)
 
+        # Update last sequence number
         self.versions.set_last_sequence(last_sequence)
-
-        # TODO: Update writers
 
         return s
 
@@ -198,7 +205,6 @@ class DB:
         if not os.path.exists(path):
             return Status.IOError('Log file not exist'), max_sequence, should_save_manifest
 
-        print('Recover log file: %s' % path)
         reader = Reader(path)
         while True:
             record = reader.read_record()
@@ -223,13 +229,16 @@ class DB:
 
         reader.close()
 
-        should_save_manifest = True
         # TODO: schedule to compact the memtable.
         return Status.OK(), max_sequence, should_save_manifest
 
     def close(self):
-        if not self.writer.closed():
+        print('close db %s' % self._db_name)
+        if self.writer and not self.writer.closed():
             self.writer.close()
 
         if self.versions:
             self.versions.close()
+
+    def log_number(self) -> int:
+        return self._log_file_num

@@ -1,5 +1,6 @@
 import os.path
 
+import config
 import utils
 from log_writer import Writer
 from version_edit import VersionEdit
@@ -205,8 +206,8 @@ class VersionSet:
         self._log_number = log_number
         self._prev_log_number = prev_log_number
 
-        # For simplicity, we always save manifest
-        should_save_manifest = True
+        if os.path.getsize(manifest_path) > config.MAX_REUSED_MANIFEST_SIZE:
+            should_save_manifest = True
 
         return Status.OK(), should_save_manifest
 

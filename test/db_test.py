@@ -2,6 +2,7 @@ import os.path
 import unittest
 from option import DBOption, WriteOption, ReadOption
 from db import DB
+from typing import List
 from status import Status
 from test.test_utils import random_user_str
 from typing import Dict, Set
@@ -30,7 +31,8 @@ class DBTest(unittest.TestCase):
         self.assertEqual(s, Status.OK())
 
         self.assertEqual(db.versions.last_sequence(), 0)
-        self.assertEqual(db.versions.log_number(), 3)
+        self.assertEqual(db.versions.log_number(), 0)
+        self.assertEqual(db._log_file_num, 3)
         self.assertEqual(db.versions.manifest_file_number(), 2)
         self.assertEqual(db.versions.next_file_number(), 4)
         self.assertEqual(db.versions.prev_log_number(), 0)
@@ -39,7 +41,7 @@ class DBTest(unittest.TestCase):
 
         db.close()
 
-    def test_basic(self):
+    def test_basic_mem(self):
         option = DBOption()
         option.create_if_missing = True
         db, s = DB.open(f'tmp_{random_user_str(10)}', option)
@@ -61,7 +63,7 @@ class DBTest(unittest.TestCase):
         self.assertEqual(db.versions.last_sequence(), 2)
         db.close()
 
-    def test_basic_2(self):
+    def test_basic_2_mem(self):
         option = DBOption()
         option.create_if_missing = True
         db, s = DB.open(f'tmp_{random_user_str(10)}', option)
@@ -127,7 +129,7 @@ class DBTest(unittest.TestCase):
 
         db.close()
 
-    def test_batch(self):
+    def test_batch_mem(self):
         option = DBOption()
         option.create_if_missing = True
         db, s = DB.open(f'tmp_{random_user_str(10)}', option)
@@ -186,6 +188,118 @@ class DBTest(unittest.TestCase):
                 self.assertEqual(s, Status.NotFound())
 
         for (k, v) in map.items():
+            value = []
+            s = db.get(ReadOption(), k, value)
+            self.assertEqual(s, Status.OK())
+            self.assertEqual(len(value), 1)
+            self.assertEqual(value[0], v)
+        db.close()
+
+    def test_recover_basic(self):
+        db_name = f'tmp_{random_user_str(10)}'
+        db_option = DBOption()
+        db_option.create_if_missing = True
+        db, s = DB.open(db_name, db_option)
+        self.assertEqual(s, Status.OK())
+        self.assertEqual(db.versions.manifest_file_number(), 2)
+        self.assertEqual(db.versions.log_number(), 0)
+        self.assertEqual(db._log_file_num, 3)
+        db.close()
+
+        db2, s = DB.open(db_name, db_option)
+        self.assertEqual(s, Status.OK())
+        self.assertEqual(db2.versions.manifest_file_number(), 2)
+        self.assertEqual(db2.versions.log_number(), 0)
+        self.assertEqual(db2._log_file_num, 4)
+        db2.close()
+
+    def test_recover_wal(self):
+        db_name = f'tmp_{random_user_str(10)}'
+        db_option = DBOption()
+        db_option.create_if_missing = True
+        db, s = DB.open(db_name, db_option)
+        self.assertEqual(s, Status.OK())
+
+        data = {}
+        for i in range(10):
+            key = random_user_str(10)
+            value = random_user_str(10)
+            db.put(WriteOption(), key, value)
+            data[key] = value
+
+        db.close()
+
+        db2, s = DB.open(db_name, db_option)
+        self.assertEqual(s, Status.OK())
+        for (k, v) in data.items():
+            value = []
+            s = db2.get(ReadOption(), k, value)
+            self.assertEqual(s, Status.OK())
+            self.assertEqual(len(value), 1)
+            self.assertEqual(value[0], v)
+
+        db2.close()
+
+    def test_recover_wal_many_times(self):
+        db_name = f'tmp_{random_user_str(10)}'
+        db_option = DBOption()
+        db_option.create_if_missing = True
+        crash_times = 100
+        dbs: List[DB] = [None] * crash_times
+
+        data = {}
+        for i in range(crash_times):
+            dbs[i], s = DB.open(db_name, db_option)
+            self.assertEqual(s, Status.OK())
+
+            for j in range(20):
+                key = random_user_str(20)
+                value = random_user_str(20)
+                data[key] = value
+                dbs[i].put(WriteOption(), key, value)
+            if i < crash_times - 1:
+                dbs[i].close()
+
+        db = dbs[crash_times - 1]
+        for (k, v) in data.items():
+            value = []
+            s = db.get(ReadOption(), k, value)
+            self.assertEqual(s, Status.OK())
+            self.assertEqual(len(value), 1)
+            self.assertEqual(value[0], v)
+        db.close()
+
+    def test_recover_wal_many_times_with_batches(self):
+        db_name = f'tmp_{random_user_str(10)}'
+        db_option = DBOption()
+        db_option.create_if_missing = True
+        crash_times = 100
+        dbs: List[DB] = [None] * crash_times
+
+        data = {}
+        for i in range(crash_times):
+            dbs[i], s = DB.open(db_name, db_option)
+            self.assertEqual(s, Status.OK())
+
+            for batch_index in range(5):
+                batch_size = random.randint(1, 5)
+                batch = WriteBatch()
+                for operation_index in range(batch_size):
+                    if False and len(data) > 0 and random.random() < 0.2:
+                        key = random.choice(list(data.keys()))
+                        batch.delete(key)
+                        del data[key]
+                    else:
+                        key = random_user_str(20)
+                        value = random_user_str(20)
+                        data[key] = value
+                        batch.put(key, value)
+                dbs[i].write(WriteOption(), batch)
+            if i < crash_times - 1:
+                dbs[i].close()
+
+        db = dbs[crash_times - 1]
+        for (k, v) in data.items():
             value = []
             s = db.get(ReadOption(), k, value)
             self.assertEqual(s, Status.OK())
