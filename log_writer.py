@@ -7,10 +7,7 @@ class Writer:
         self._file_name = file_name
         self._fd = open(file_name, 'ab')
         self._write_size = 0
-
-    def __del__(self):
-        self._fd.flush()
-        self._fd.close()
+        self._closed = False
 
     def write_record(self, data: bytearray):
         """
@@ -36,3 +33,10 @@ class Writer:
 
     def flush(self):
         self._fd.flush()
+
+    def close(self):
+        self._fd.close()
+        self._closed = True
+
+    def closed(self) -> bool:
+        return self._closed

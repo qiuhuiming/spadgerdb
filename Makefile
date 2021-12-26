@@ -1,4 +1,4 @@
-test: test_bloom_filter test_dbformat test_skiplist test_memtable test_db test_log test_write_batch
+test: test_bloom_filter test_dbformat test_skiplist test_memtable test_db test_log test_write_batch test_version_edit test_version_set
 
 test_bloom_filter:
 	python3 -m unittest test.bloom_filter_test
@@ -23,3 +23,9 @@ test_write_batch:
 
 test_version_edit:
 	python3 -m unittest test.version_edit_test
+
+test_version_set:
+	python3 -m unittest test.version_set_test
+
+clean:
+	rm -rf test/tmp* tmp*

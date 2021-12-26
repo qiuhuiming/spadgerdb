@@ -8,6 +8,7 @@ class Reader:
     def __init__(self, file_name):
         self._fd = open(file_name, 'rb')
         self.end_of_file = False
+        self._closed = False
 
     def __del__(self):
         self._fd.close()
@@ -20,12 +21,13 @@ class Reader:
         Reads a record from the log file.
         :return: A bytearray object. If the file is end, returns None.
         """
-        if self.end():
+        if self.closed():
             return None
 
         length = int.from_bytes(self._fd.read(4), byteorder=byte_order)
         if length == 0:
             self.end_of_file = True
+            self.close()
             return None
         data = bytearray(self._fd.read(length))
         checksum_from_log = int.from_bytes(self._fd.read(4), byteorder=byte_order)
@@ -39,3 +41,10 @@ class Reader:
             raise Exception("Checksum mismatch")
 
         return data
+
+    def close(self):
+        self._fd.close()
+        self._closed = True
+
+    def closed(self) -> bool:
+        return self._closed

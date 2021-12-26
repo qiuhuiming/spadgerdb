@@ -34,20 +34,20 @@ class DB:
 
         edit = VersionEdit()
         if db._mem is None:
-            new_log_number = db.versions.next_file_number()
+            new_log_number = db.versions.new_file_number()
             try:
                 writer = Writer(log_file_name(db_name, new_log_number))
             except Exception as e:
                 return None, Status.IOError(str(e))
 
-            edit.log_number = new_log_number
+            edit.set_log_number(new_log_number)
             db.writer = writer
             db._mem = MemTable()
             db._log_file_num = new_log_number
 
         if should_save_manifest:
-            edit.prev_log_number = 0
-            edit.log_number = db._log_file_num
+            edit.set_prev_log_number(0)
+            edit.set_log_number(db._log_file_num)
             s = db.versions.log_and_apply(edit)
             if not s.ok():
                 return None, s
@@ -100,6 +100,7 @@ class DB:
                 return s, should_save_manifest
 
             self.versions.mark_file_number_used(log_number)
+        self.versions.set_last_sequence(max(max_sequence, self.versions.last_sequence()))
 
         return s, should_save_manifest
 
@@ -111,7 +112,7 @@ class DB:
         if option.snapshot:
             seq = option.snapshot.get_sequence_number()
         else:
-            seq = self.versions.get_last_sequence()
+            seq = self.versions.last_sequence()
 
         lkey = LookupKey(user_key=key, sequence=seq)
         # Firstly, try to get from memtable.
@@ -146,8 +147,8 @@ class DB:
 
         # TODO: Initialize the writers
 
-        # Accquire last sequence number
-        last_sequence = self.versions.get_last_sequence()
+        # Acquire last sequence number
+        last_sequence = self.versions.last_sequence()
         batch.set_sequence_number(last_sequence + 1)
         last_sequence += batch.count()
 
@@ -163,18 +164,22 @@ class DB:
         return s
 
     def new_db(self) -> Status:
+        print('new db %s' % self._db_name)
+        if not os.path.exists(self._db_name):
+            os.mkdir(self._db_name)
+
         edit = VersionEdit()
-        edit.log_number = 0
-        edit.next_file_number = 2
-        edit.last_sequence = 0
-        edit.comparator = USER_KEY_COMPARATOR
+        edit.set_log_number(0)
+        edit.set_next_file_number(2)
+        edit.set_last_sequence(0)
+        edit.set_comparator(USER_KEY_COMPARATOR)
 
         manifest = manifest_file_name(self._db_name, 1)
         writer = Writer(manifest)
         records = edit.serialize()
         writer.write_record(records)
         writer.flush()
-        del writer
+        writer.close()
 
         s = save_current_file(self._db_name, 1)
         if not s.ok():
@@ -193,6 +198,7 @@ class DB:
         if not os.path.exists(path):
             return Status.IOError('Log file not exist'), max_sequence, should_save_manifest
 
+        print('Recover log file: %s' % path)
         reader = Reader(path)
         while True:
             record = reader.read_record()
@@ -215,9 +221,15 @@ class DB:
 
             max_sequence = max(max_sequence, last_seq)
 
-
-        del reader
+        reader.close()
 
         should_save_manifest = True
         # TODO: schedule to compact the memtable.
         return Status.OK(), max_sequence, should_save_manifest
+
+    def close(self):
+        if not self.writer.closed():
+            self.writer.close()
+
+        if self.versions:
+            self.versions.close()

@@ -1,5 +1,7 @@
 import os.path
 
+import utils
+from log_writer import Writer
 from version_edit import VersionEdit
 from option import DBOption
 from db_types import SequenceNumber
@@ -58,6 +60,9 @@ class VersionSet:
         self._manifest_file_number = 0
         self._log_number = 0
 
+        # The writer to write manifest
+        self._descriptor_log: Writer = None
+
         # VersionSet keeps a linked list of active versions.
         # like this:
         # * - * - * - <_current> - <_dummy>
@@ -81,6 +86,22 @@ class VersionSet:
 
     def log_number(self) -> int:
         return self._log_number
+
+    def set_next_file_number(self, number: int):
+        self._next_file_number = number
+
+    def set_prev_log_number(self, number: int):
+        self._prev_log_number = number
+
+    def set_last_sequence(self, seq: int):
+        assert seq >= self._last_sequence
+        self._last_sequence = seq
+
+    def set_log_number(self, number: int):
+        self._log_number = number
+
+    def set_manifest_file_number(self, number: int):
+        self._manifest_file_number = number
 
     def current(self) -> Version:
         return self._current
@@ -204,17 +225,85 @@ class VersionSet:
         version.prev.next = version
         version.next.prev = version
 
-    def get_last_sequence(self) -> int:
-        return self._last_sequence
-
-    def set_last_sequence(self, seq: int):
-        assert seq >= self._last_sequence
-        self._last_sequence = seq
-
     def mark_file_number_used(self, log_number: int):
         if self._next_file_number <= log_number:
             self._next_file_number = log_number + 1
 
-    def log_and_apply(self, edit: VersionEdit):
-        # TODO
-        pass
+    def log_and_apply(self, edit: VersionEdit) -> Status:
+        """
+        save version edit to log file and apply it to current version set
+
+        :param edit:
+        :return:
+        """
+        # We can not apply to the current version if it is not the last version
+        if edit.has_log_number:
+            assert edit.log_number >= self._log_number
+            assert edit.log_number < self._next_file_number
+        else:
+            edit.set_log_number(self.log_number())
+
+        if not edit.has_prev_log_number:
+            edit.set_prev_log_number(self.prev_log_number())
+
+        edit.set_next_file_number(self._next_file_number)
+        edit.set_last_sequence(self._last_sequence)
+
+        # Build the new version based on the current version
+        v = Version(self)
+        builder = VersionBuilder(self, self.current())
+        builder.apply(edit)
+        builder.build(v)
+
+        if self._descriptor_log is None:
+            # The descriptor_log does not exist, create it.
+            # And we need to write the snapshot to the descriptor_log
+            manifest = utils.manifest_file_name(self._db_name, self._manifest_file_number)
+            self._descriptor_log = Writer(manifest)
+            s, snapshot = self.build_snapshot()
+            if not s.ok():
+                return s
+            print('write snapshot to descriptor_log')
+            self._descriptor_log.write_record(snapshot)
+
+        # Write the version edit to the descriptor_log
+        record = edit.serialize()
+        self._descriptor_log.write_record(record)
+        self._descriptor_log.flush()
+        print('write version edit to descriptor_log')
+        s = utils.save_current_file(self._db_name, self._manifest_file_number)
+        if not s.ok():
+            manifest = utils.manifest_file_name(self._db_name, self._manifest_file_number)
+            if os.path.exists(manifest):
+                os.remove(manifest)
+            self._descriptor_log.close()
+            return s
+
+        # Accept the new version
+        self.append(v)
+        self._log_number = edit.log_number
+        self._prev_log_number = edit.prev_log_number
+        print('install new version. log_number: {}, prev_log_number: {}'.format(self._log_number, self._prev_log_number))
+
+        return Status.OK()
+
+    def build_snapshot(self) -> (Status, bytearray):
+        edit = VersionEdit()
+        edit.set_comparator(USER_KEY_COMPARATOR)
+
+        # TODO: Save compact pointers and files
+        return Status.OK(), edit.serialize()
+
+    def new_file_number(self) -> int:
+        """
+        Allocate a new file number
+        :return old file number
+        """
+        ret = self._next_file_number
+        self._next_file_number += 1
+        return ret
+
+    def close(self):
+        if self._descriptor_log is not None:
+            self._descriptor_log.close()
+            self._descriptor_log = None

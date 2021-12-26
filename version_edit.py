@@ -79,6 +79,27 @@ class VersionEdit:
         edit.__dict__ = json.loads(json_str)
         edit.compact_pointers = list(map(lambda x: (x[0], bytearray(x[1].encode('utf-8'))), edit.compact_pointers))
         edit.deleted_files = set(map(lambda x: (x[0], x[1]), edit.deleted_files))
-        edit.new_files = list(map(lambda x: (x[0], FileMetaData.deserialize(bytearray(x[1].encode('utf-8')))), edit.new_files))
+        edit.new_files = list(
+            map(lambda x: (x[0], FileMetaData.deserialize(bytearray(x[1].encode('utf-8')))), edit.new_files))
 
         return edit
+
+    def set_log_number(self, log_number: int):
+        self.log_number = log_number
+        self.has_log_number = True
+
+    def set_prev_log_number(self, prev_log_number: int):
+        self.prev_log_number = prev_log_number
+        self.has_prev_log_number = True
+
+    def set_next_file_number(self, next_file_number: int):
+        self.next_file_number = next_file_number
+        self.has_next_file_number = True
+
+    def set_last_sequence(self, last_sequence: int):
+        self.last_sequence = last_sequence
+        self.has_last_sequence = True
+
+    def set_comparator(self, comparator: str):
+        self.comparator = comparator
+        self.has_comparator = True

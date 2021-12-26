@@ -74,6 +74,7 @@ def manifest_file_name(db_name: str, file_number: int) -> str:
 
 def save_current_file(db_name: str, file_number: int) -> Status:
     current_file = current_file_name(db_name)
+    print(f'save current file: {current_file}, manifest file: {file_number}')
     try:
         with open(current_file, 'w') as f:
             f.write(f'{file_number}.manifest')
