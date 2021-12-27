@@ -1,4 +1,7 @@
+import logging
 import os.path
+
+from option import DBOption
 from status import Status
 
 from dbformat import Decoder, byte_order
@@ -74,7 +77,6 @@ def manifest_file_name(db_name: str, file_number: int) -> str:
 
 def save_current_file(db_name: str, file_number: int) -> Status:
     current_file = current_file_name(db_name)
-    print(f'save current file: {current_file}, manifest file: {file_number}')
     try:
         with open(current_file, 'w') as f:
             f.write(f'{file_number}.manifest')
@@ -82,3 +84,40 @@ def save_current_file(db_name: str, file_number: int) -> Status:
         return Status.OK()
     except Exception as e:
         return Status.IOError(f'{e}')
+
+
+def read_logging_level_from_env() -> int:
+    env_level = os.getenv('LOG_LEVEL')
+    if env_level is None:
+        return logging.FATAL
+    env_level = env_level.upper()
+    if env_level == 'DEBUG':
+        return logging.DEBUG
+    elif env_level == 'INFO':
+        return logging.INFO
+    elif env_level == 'WARNING':
+        return logging.WARNING
+    elif env_level == 'ERROR':
+        return logging.ERROR
+    elif env_level == 'CRITICAL':
+        return logging.CRITICAL
+    elif env_level == 'FATAL':
+        return logging.FATAL
+    elif env_level == 'NOTSET':
+        return logging.NOTSET
+
+    return logging.CRITICAL
+
+
+def basic_logging_format() -> str:
+    return '%(asctime)s - %(filename)s:%(lineno)d - %(funcName)s - %(levelname)s: %(message)s'
+
+
+def get_logger_from_db_option(db_name: str, option: DBOption) -> logging.Logger:
+    logger = logging.getLogger(db_name)
+    handler = logging.StreamHandler()
+    handler.setFormatter(logging.Formatter(basic_logging_format()))
+    logger.setLevel(option.log_level)
+    logger.addHandler(handler)
+    logger.propagate = False
+    return logger

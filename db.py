@@ -1,5 +1,7 @@
+import logging
 import os.path
 
+import utils
 from status import Status
 from option import ReadOption, WriteOption, DBOption
 from version_edit import VersionEdit
@@ -12,6 +14,8 @@ from log_writer import Writer
 from log_reader import Reader
 from utils import log_file_name, current_file_name, USER_KEY_COMPARATOR, manifest_file_name, save_current_file
 
+logging.basicConfig(level=logging.CRITICAL)
+
 
 class DB:
     def __init__(self, db_name: str, option: DBOption):
@@ -23,11 +27,12 @@ class DB:
         self._option = option
         self.versions = VersionSet(db_name=db_name, option=option)
         self.writer: Writer = None
+        self._logger = utils.get_logger_from_db_option(db_name, option)
 
     @staticmethod
     def open(db_name: str, option: DBOption) -> ('DB', Status):
-        print(f'open db: {db_name}')
         db = DB(db_name, option)
+        db._logger.info('open db %s' % db_name)
         s, should_save_manifest = db.recover()
         if not s.ok():
             return None, s
@@ -46,7 +51,7 @@ class DB:
             db._log_file_num = new_log_number
 
         if should_save_manifest:
-            print('save manifest')
+            db._logger.info('save manifest when opening db %s' % db_name)
             edit.set_prev_log_number(0)
             edit.set_log_number(db._log_file_num)
             s = db.versions.log_and_apply(edit)
@@ -95,7 +100,9 @@ class DB:
                     log_numbers.append(log_number)
 
         log_numbers.sort()
-        print(f'recover log numbers: {log_numbers}')
+        self._logger.info('recover log numbers: len=%s' % len(log_numbers))
+        self._logger.debug('recover log numbers: detail=%s' % log_numbers)
+
         for log_number in log_numbers:
             s, max_sequence, should_save_manifest = self.recover_log_file(log_number)
             if not s.ok():
@@ -171,7 +178,7 @@ class DB:
         return s
 
     def new_db(self) -> Status:
-        print('new db %s' % self._db_name)
+        self._logger.info('new db %s' % self._db_name)
         if not os.path.exists(self._db_name):
             os.mkdir(self._db_name)
 
@@ -189,6 +196,7 @@ class DB:
         writer.close()
 
         s = save_current_file(self._db_name, 1)
+        self._logger.info('saved manifest file %s in new_db' % manifest)
         if not s.ok():
             if os.path.exists(manifest):
                 os.remove(manifest)
@@ -233,7 +241,7 @@ class DB:
         return Status.OK(), max_sequence, should_save_manifest
 
     def close(self):
-        print('close db %s' % self._db_name)
+        self._logger.info('close db %s' % self._db_name)
         if self.writer and not self.writer.closed():
             self.writer.close()
 

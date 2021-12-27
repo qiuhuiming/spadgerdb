@@ -1,3 +1,4 @@
+import logging
 import os.path
 
 import config
@@ -60,6 +61,7 @@ class VersionSet:
         self._last_sequence: SequenceNumber = 0
         self._manifest_file_number = 0
         self._log_number = 0
+        self._logger = utils.get_logger_from_db_option(db_name, option)
 
         # The writer to write manifest
         self._descriptor_log: Writer = None
@@ -264,15 +266,15 @@ class VersionSet:
             s, snapshot = self.build_snapshot()
             if not s.ok():
                 return s
-            print('write snapshot to descriptor_log')
+            self
             self._descriptor_log.write_record(snapshot)
 
         # Write the version edit to the descriptor_log
         record = edit.serialize()
         self._descriptor_log.write_record(record)
         self._descriptor_log.flush()
-        print('write version edit to descriptor_log')
         s = utils.save_current_file(self._db_name, self._manifest_file_number)
+        self._logger.info('save current file in log_and_apply')
         if not s.ok():
             manifest = utils.manifest_file_name(self._db_name, self._manifest_file_number)
             if os.path.exists(manifest):
@@ -284,7 +286,8 @@ class VersionSet:
         self.append(v)
         self._log_number = edit.log_number
         self._prev_log_number = edit.prev_log_number
-        print('install new version. log_number: {}, prev_log_number: {}'.format(self._log_number, self._prev_log_number))
+        self._logger.info(
+            'install new version. log_number: {}, prev_log_number: {}'.format(self._log_number, self._prev_log_number))
 
         return Status.OK()
 

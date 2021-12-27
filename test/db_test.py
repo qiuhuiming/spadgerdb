@@ -1,5 +1,7 @@
 import os.path
 import unittest
+
+import utils
 from option import DBOption, WriteOption, ReadOption
 from db import DB
 from typing import List
@@ -244,6 +246,7 @@ class DBTest(unittest.TestCase):
         db_name = f'tmp_{random_user_str(10)}'
         db_option = DBOption()
         db_option.create_if_missing = True
+        db_option.log_level = utils.read_logging_level_from_env()
         crash_times = 100
         dbs: List[DB] = [None] * crash_times
 
