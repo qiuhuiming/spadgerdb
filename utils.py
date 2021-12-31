@@ -1,7 +1,6 @@
 import logging
 import os.path
 
-from option import DBOption
 from status import Status
 
 from dbformat import Decoder, byte_order
@@ -113,11 +112,11 @@ def basic_logging_format() -> str:
     return '%(asctime)s - %(filename)s:%(lineno)d - %(funcName)s - %(levelname)s: %(message)s'
 
 
-def get_logger_from_db_option(db_name: str, option: DBOption) -> logging.Logger:
+def get_logger_from_db_option(db_name: str, log_level: int) -> logging.Logger:
     logger = logging.getLogger(db_name)
     handler = logging.StreamHandler()
     handler.setFormatter(logging.Formatter(basic_logging_format()))
-    logger.setLevel(option.log_level)
+    logger.setLevel(log_level)
     logger.addHandler(handler)
     logger.propagate = False
     return logger

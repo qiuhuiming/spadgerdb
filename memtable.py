@@ -10,6 +10,7 @@ class MemTable:
     def __init__(self):
         self._comparator = internal_key_comparator
         self._table = Skiplist(comparator=self._comparator)
+        self._mem_usages = 0
 
     def compare_internal_key(self, x, y) -> int:
         return self._comparator(x, y)
@@ -20,6 +21,7 @@ class MemTable:
     def add(self, s: SequenceNumber, key: str, value: str, t: ValueType):
         buf = Encoder.encode_full_memtable_key(s, key, value, t)
         self._table.insert(buf)
+        self._mem_usages += len(buf)
 
     def get(self, lkey: LookupKey, value: List[str], s: Status) -> bool:
         it = self._table.iter()
@@ -41,3 +43,6 @@ class MemTable:
                     s.assign(Status.NotFound())
                     return True
         return False
+
+    def approximate_memory_usage(self):
+        return self._mem_usages

@@ -61,7 +61,7 @@ class VersionSet:
         self._last_sequence: SequenceNumber = 0
         self._manifest_file_number = 0
         self._log_number = 0
-        self._logger = utils.get_logger_from_db_option(db_name, option)
+        self._logger = utils.get_logger_from_db_option(db_name, option.log_level)
 
         # The writer to write manifest
         self._descriptor_log: Writer = None

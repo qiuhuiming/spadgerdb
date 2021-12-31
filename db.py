@@ -27,7 +27,7 @@ class DB:
         self._option = option
         self.versions = VersionSet(db_name=db_name, option=option)
         self.writer: Writer = None
-        self._logger = utils.get_logger_from_db_option(db_name, option)
+        self._logger = utils.get_logger_from_db_option(db_name, option.log_level)
 
     @staticmethod
     def open(db_name: str, option: DBOption) -> ('DB', Status):
@@ -161,12 +161,7 @@ class DB:
         batch.set_sequence_number(last_sequence + 1)
         last_sequence += batch.count()
 
-        # Write to WAL
-        if self.log_number() is None:
-            if self.writer:
-                self.writer.close()
-            self._log_file_num = self.versions.new_file_number()
-            self.writer = Writer(log_file_name(self._db_name, self._log_file_num))
+        s = self.make_room_for_write(force=(batch is None))
         self.writer.write_record(batch.serialize())
 
         # Write to memtable
@@ -241,7 +236,6 @@ class DB:
         return Status.OK(), max_sequence, should_save_manifest
 
     def close(self):
-        self._logger.info('close db %s' % self._db_name)
         if self.writer and not self.writer.closed():
             self.writer.close()
 
@@ -250,3 +244,42 @@ class DB:
 
     def log_number(self) -> int:
         return self._log_file_num
+
+    def make_room_for_write(self, force: bool) -> Status:
+        if self._mem is None:
+            # New memtable
+            self._mem = MemTable()
+
+        if self.log_number() is None:
+            # New WAL file
+            if self.writer:
+                self.writer.close()
+            self._log_file_num = self.versions.new_file_number()
+            self.writer = Writer(log_file_name(self._db_name, self._log_file_num))
+
+        if self._mem.approximate_memory_usage() < self._option.write_buffer_size:
+            # There is room for writing, we do not need to force
+            return Status.OK()
+        elif self._imm is not None:
+            # We have filled up the current memtable, but the previous one is not
+            # being compacted, so we can wait for the previous one to be compacted.
+            # TODO: At this time, we raise an exception.
+            raise Exception('imm is not None')
+        else:
+            # Switch to a new memtable
+            self._logger.info("switch to a new memtable")
+            self._imm = self._mem
+            self._mem = MemTable()
+            self._has_imm = True
+            self._logger = self.versions.new_file_number()
+            self.writer.close()
+            self.writer = Writer(log_file_name(self._db_name, self._log_file_num))
+            self.maybe_schedule_compaction()
+            return Status.OK()
+
+    def maybe_schedule_compaction(self):
+        # TODO
+        pass
+
+
+
