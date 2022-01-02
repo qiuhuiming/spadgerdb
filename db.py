@@ -257,6 +257,9 @@ class DB:
             self._log_file_num = self.versions.new_file_number()
             self.writer = Writer(log_file_name(self._db_name, self._log_file_num))
 
+        if self._option.only_mem:
+            return Status.OK()
+
         if self._mem.approximate_memory_usage() < self._option.write_buffer_size:
             # There is room for writing, we do not need to force
             return Status.OK()

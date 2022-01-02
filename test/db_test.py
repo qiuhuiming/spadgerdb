@@ -317,6 +317,42 @@ class DBTest(unittest.TestCase):
             self.assertEqual(value[0], v)
         db.close()
 
+    def test_only_mem(self):
+        db_name = f'tmp_{random_user_str(10)}'
+        db_option = DBOption()
+        db_option.create_if_missing = True
+        db_option.write_buffer_size = 1024
+        db_option.only_mem = True
+        db, s = DB.open(db_name, db_option)
+        self.assertTrue(s.ok())
+
+        def mem_table_key_len(key, value):
+            return len(key) + len(value) + 4 + 8 + 4
+
+        len_sum = 0
+        data = {}
+        while True:
+            key = random_user_str(100)
+            value = random_user_str(100)
+            db.put(WriteOption(), key, value)
+            data[key] = value
+            len_sum += mem_table_key_len(key, value)
+            if len_sum >= 1200:
+                break
+
+        self.assertFalse(db._has_imm)
+        self.assertIsNone(db._imm)
+
+        for (k, v) in data.items():
+            value = []
+            s = db.get(ReadOption(), k, value)
+            self.assertTrue(s.ok())
+            self.assertEqual(len(value), 1)
+            self.assertEqual(value[0], v)
+
+        db.close()
+
+
     def test_switch_to_imm(self):
         db_name = f'tmp_{random_user_str(10)}'
         db_option = DBOption()

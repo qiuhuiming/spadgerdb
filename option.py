@@ -6,6 +6,7 @@ import utils
 
 class DBOption:
     def __init__(self):
+        self.only_mem: bool = False
         self.create_if_missing = False
         self.error_if_exists = False
         self.write_buffer_size = 1024 * 1024 * 4
