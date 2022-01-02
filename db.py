@@ -235,6 +235,9 @@ class DB:
         # TODO: schedule to compact the memtable.
         return Status.OK(), max_sequence, should_save_manifest
 
+    def last_sequence(self) -> int:
+        return self.versions.last_sequence()
+
     def close(self):
         if self.writer and not self.writer.closed():
             self.writer.close()

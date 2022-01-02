@@ -70,7 +70,7 @@ if __name__ == '__main__':
                 else:
                     print('Error:', s.msg)
         elif cmd[0] == 'seq':
-            print(db.versions.last_sequence())
+            print(db.last_sequence())
         elif cmd[0] == 'exit':
             break
         else:
