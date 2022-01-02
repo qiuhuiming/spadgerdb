@@ -114,7 +114,7 @@ class DB:
         return s, should_save_manifest
 
     def get(self, option: ReadOption, key: str, value: List[str]) -> Status:
-        s = Status.OK()
+        s = Status.NotFound()
         # Read sequence number from option.
         # If option.snapshot is None, use the last sequence number from versions.
         seq = 0
